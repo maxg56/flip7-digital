@@ -187,6 +187,15 @@ impl GameState {
         }
     }
 
+    pub fn new_with_seed(seed: u64) -> Self {
+        let deck = Deck::new(seed);
+        Self {
+            players: Vec::new(),
+            deck,
+            round_state: RoundState::new(),
+        }
+    }
+
     pub fn add_player(&mut self, id: String, name: String) {
         let player = Player::new(id, name);
         self.players.push(player);
