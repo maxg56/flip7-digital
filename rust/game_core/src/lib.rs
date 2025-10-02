@@ -427,3 +427,222 @@ mod tests {
         assert!(game.to_json().is_ok());
     }
 }
+
+// FFI module for React Native integration
+use std::ffi::{CStr, CString};
+use std::os::raw::c_char;
+use std::sync::{Mutex, OnceLock};
+
+// Global game state storage
+static GAME_STATES: OnceLock<Mutex<HashMap<String, GameState>>> = OnceLock::new();
+static mut NEXT_GAME_ID: u32 = 1;
+
+// Helper function to convert Rust string to C string
+fn to_c_string(s: String) -> *mut c_char {
+    match CString::new(s) {
+        Ok(c_string) => c_string.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+// Helper function to convert C string to Rust string
+fn from_c_string(ptr: *const c_char) -> Result<String, String> {
+    if ptr.is_null() {
+        return Err("Null pointer".to_string());
+    }
+
+    unsafe {
+        match CStr::from_ptr(ptr).to_str() {
+            Ok(s) => Ok(s.to_string()),
+            Err(_) => Err("Invalid UTF-8".to_string()),
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn flip7_new_game(players: u32, seed: u64) -> *mut c_char {
+    let result = (|| -> Result<String, String> {
+        if players < 1 || players > 8 {
+            return Err("Number of players must be between 1 and 8".to_string());
+        }
+
+        let mut game = GameState::new_with_seed(seed);
+
+        // Add players
+        for i in 0..players {
+            game.add_player(i.to_string(), format!("Player {}", i));
+        }
+
+        // Start the first round
+        game.start_round().map_err(|e| format!("Failed to start round: {}", e))?;
+
+        let game_id = unsafe {
+            let id = NEXT_GAME_ID;
+            NEXT_GAME_ID += 1;
+            id.to_string()
+        };
+
+        // Initialize or get the game states
+        let states = GAME_STATES.get_or_init(|| Mutex::new(HashMap::new()));
+        let mut states = states.lock().map_err(|_| "Failed to lock game states")?;
+        states.insert(game_id.clone(), game);
+
+        // Return success response with game ID
+        let response = serde_json::json!({
+            "success": true,
+            "game_id": game_id,
+            "players": players,
+            "seed": seed
+        });
+
+        Ok(response.to_string())
+    })();
+
+    match result {
+        Ok(json) => to_c_string(json),
+        Err(err) => {
+            let error_response = serde_json::json!({
+                "success": false,
+                "error": err
+            });
+            to_c_string(error_response.to_string())
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn flip7_get_state(game_id: *const c_char) -> *mut c_char {
+    let result = (|| -> Result<String, String> {
+        let game_id_str = from_c_string(game_id)?;
+
+        let states = GAME_STATES.get_or_init(|| Mutex::new(HashMap::new()));
+        let states = states.lock().map_err(|_| "Failed to lock game states")?;
+
+        match states.get(&game_id_str) {
+            Some(game) => {
+                let response = serde_json::json!({
+                    "success": true,
+                    "game_state": game
+                });
+                Ok(response.to_string())
+            }
+            None => Err("Game not found".to_string())
+        }
+    })();
+
+    match result {
+        Ok(json) => to_c_string(json),
+        Err(err) => {
+            let error_response = serde_json::json!({
+                "success": false,
+                "error": err
+            });
+            to_c_string(error_response.to_string())
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn flip7_draw(game_id: *const c_char, player: u32) -> *mut c_char {
+    let result = (|| -> Result<String, String> {
+        let game_id_str = from_c_string(game_id)?;
+
+        let states = GAME_STATES.get_or_init(|| Mutex::new(HashMap::new()));
+        let mut states = states.lock().map_err(|_| "Failed to lock game states")?;
+
+        match states.get_mut(&game_id_str) {
+            Some(game) => {
+                if player as usize >= game.players.len() {
+                    return Err(format!("Player {} does not exist", player));
+                }
+
+                let player_id = player.to_string();
+                game.player_draw(&player_id).map_err(|e| format!("Draw failed: {}", e))?;
+
+                let player_obj = &game.players[player as usize];
+                let response = serde_json::json!({
+                    "success": true,
+                    "player": player,
+                    "hand_total": player_obj.hand.total_value(),
+                    "cards_count": player_obj.hand.cards.len(),
+                    "is_bust": player_obj.hand.is_bust(),
+                    "has_flip7": player_obj.hand.has_flip7(),
+                    "round_finished": game.round_state.is_finished
+                });
+
+                Ok(response.to_string())
+            }
+            None => Err("Game not found".to_string())
+        }
+    })();
+
+    match result {
+        Ok(json) => to_c_string(json),
+        Err(err) => {
+            let error_response = serde_json::json!({
+                "success": false,
+                "error": err
+            });
+            to_c_string(error_response.to_string())
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn flip7_stay(game_id: *const c_char, player: u32) -> *mut c_char {
+    let result = (|| -> Result<String, String> {
+        let game_id_str = from_c_string(game_id)?;
+
+        let states = GAME_STATES.get_or_init(|| Mutex::new(HashMap::new()));
+        let mut states = states.lock().map_err(|_| "Failed to lock game states")?;
+
+        match states.get_mut(&game_id_str) {
+            Some(game) => {
+                if player as usize >= game.players.len() {
+                    return Err(format!("Player {} does not exist", player));
+                }
+
+                let player_id = player.to_string();
+                game.player_stay(&player_id).map_err(|e| format!("Stay failed: {}", e))?;
+
+                let mut scores = None;
+                if game.round_state.is_finished {
+                    scores = Some(game.compute_scores());
+                }
+
+                let response = serde_json::json!({
+                    "success": true,
+                    "player": player,
+                    "round_finished": game.round_state.is_finished,
+                    "scores": scores
+                });
+
+                Ok(response.to_string())
+            }
+            None => Err("Game not found".to_string())
+        }
+    })();
+
+    match result {
+        Ok(json) => to_c_string(json),
+        Err(err) => {
+            let error_response = serde_json::json!({
+                "success": false,
+                "error": err
+            });
+            to_c_string(error_response.to_string())
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn flip7_free_string(ptr: *mut c_char) {
+    if !ptr.is_null() {
+        unsafe {
+            let _ = CString::from_raw(ptr);
+        }
+    }
+}
+
+#[cfg(test)]
+mod ffi_test;
