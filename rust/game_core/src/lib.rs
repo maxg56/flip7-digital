@@ -1,5 +1,5 @@
+use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
 use serde::{Deserialize, Serialize};
-use rand_chacha::{ChaCha8Rng, rand_core::SeedableRng};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -311,7 +311,9 @@ impl GameState {
     }
 
     pub fn is_flip7(&self, player_id: &str) -> Result<bool, String> {
-        let player = self.players.iter()
+        let player = self
+            .players
+            .iter()
             .find(|p| p.id == player_id)
             .ok_or("Player not found")?;
 
@@ -474,7 +476,8 @@ pub extern "C" fn flip7_new_game(players: u32, seed: u64) -> *mut c_char {
         }
 
         // Start the first round
-        game.start_round().map_err(|e| format!("Failed to start round: {}", e))?;
+        game.start_round()
+            .map_err(|e| format!("Failed to start round: {}", e))?;
 
         let game_id = unsafe {
             let id = NEXT_GAME_ID;
@@ -526,7 +529,7 @@ pub extern "C" fn flip7_get_state(game_id: *const c_char) -> *mut c_char {
                 });
                 Ok(response.to_string())
             }
-            None => Err("Game not found".to_string())
+            None => Err("Game not found".to_string()),
         }
     })();
 
@@ -557,7 +560,8 @@ pub extern "C" fn flip7_draw(game_id: *const c_char, player: u32) -> *mut c_char
                 }
 
                 let player_id = player.to_string();
-                game.player_draw(&player_id).map_err(|e| format!("Draw failed: {}", e))?;
+                game.player_draw(&player_id)
+                    .map_err(|e| format!("Draw failed: {}", e))?;
 
                 let player_obj = &game.players[player as usize];
                 let response = serde_json::json!({
@@ -572,7 +576,7 @@ pub extern "C" fn flip7_draw(game_id: *const c_char, player: u32) -> *mut c_char
 
                 Ok(response.to_string())
             }
-            None => Err("Game not found".to_string())
+            None => Err("Game not found".to_string()),
         }
     })();
 
@@ -603,7 +607,8 @@ pub extern "C" fn flip7_stay(game_id: *const c_char, player: u32) -> *mut c_char
                 }
 
                 let player_id = player.to_string();
-                game.player_stay(&player_id).map_err(|e| format!("Stay failed: {}", e))?;
+                game.player_stay(&player_id)
+                    .map_err(|e| format!("Stay failed: {}", e))?;
 
                 let mut scores = None;
                 if game.round_state.is_finished {
@@ -619,7 +624,7 @@ pub extern "C" fn flip7_stay(game_id: *const c_char, player: u32) -> *mut c_char
 
                 Ok(response.to_string())
             }
-            None => Err("Game not found".to_string())
+            None => Err("Game not found".to_string()),
         }
     })();
 

@@ -23,10 +23,12 @@ fn main() {
 
     println!("\n=== Initial Hands ===");
     for player in game.players.iter() {
-        println!("{}: {} cards, total value: {}",
-                 player.name,
-                 player.hand.cards.len(),
-                 player.hand.total_value());
+        println!(
+            "{}: {} cards, total value: {}",
+            player.name,
+            player.hand.cards.len(),
+            player.hand.total_value()
+        );
 
         print!("  Cards: ");
         for card in &player.hand.cards {
@@ -70,11 +72,13 @@ fn main() {
     let scores = game.compute_scores();
 
     for player in &game.players {
-        println!("{}: {} cards, total value: {}, round score: {}",
-                 player.name,
-                 player.hand.cards.len(),
-                 player.hand.total_value(),
-                 scores.get(&player.id).unwrap_or(&0));
+        println!(
+            "{}: {} cards, total value: {}, round score: {}",
+            player.name,
+            player.hand.cards.len(),
+            player.hand.total_value(),
+            scores.get(&player.id).unwrap_or(&0)
+        );
 
         if player.hand.has_flip7() {
             println!("  🎉 FLIP7 bonus!");
@@ -88,13 +92,16 @@ fn main() {
     println!("\n=== Serialization Test ===");
     match game.to_json() {
         Ok(json) => {
-            println!("✓ GameState serialized successfully ({} characters)", json.len());
+            println!(
+                "✓ GameState serialized successfully ({} characters)",
+                json.len()
+            );
 
             match GameState::from_json(&json) {
                 Ok(_) => println!("✓ GameState deserialized successfully"),
                 Err(e) => println!("✗ Deserialization failed: {}", e),
             }
-        },
+        }
         Err(e) => println!("✗ Serialization failed: {}", e),
     }
 
